@@ -1,1 +1,2 @@
-python3 telegram_bot.py
+start: python3 telegram_bot.py
+
