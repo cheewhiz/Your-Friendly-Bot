@@ -1,3 +1,7 @@
+import time
+print("🚀 Bot is starting...")
+time.sleep(5)
+
 import os
 import openai
 import telegram
@@ -26,12 +30,16 @@ async def handle_message(update: Update, context: CallbackContext):
             f"{name}? That's a solid name. What’s on your mind?",
             f"Sweet, {name}! Now that we’re on a first-name basis, what’s up?"
         ])
+
     elif "how are you" in user_message:
         bot_reply = "I’m just a bunch of 1s and 0s, but if I had feelings, I’d say I’m fabulous! 💅 How about you?"
+
     elif "what's up" in user_message:
         bot_reply = "Not much, just chilling in cyberspace. You?"
+
     elif "who are you" in user_message:
         bot_reply = "I’m your AI assistant! Think of me as your smart, slightly quirky digital sidekick. 😎"
+
     elif "tell me a joke" in user_message:
         jokes = [
             "Why don’t skeletons fight each other? They don’t have the guts.",
@@ -40,15 +48,18 @@ async def handle_message(update: Update, context: CallbackContext):
             "Why don’t oysters donate to charity? Because they are shellfish!",
         ]
         bot_reply = random.choice(jokes)
+
     elif "i love" in user_message:
         love_thing = user_message.split("i love")[-1].strip().capitalize()
         bot_reply = f"Ohhh, {love_thing}! That’s awesome. Tell me more! 😃"
+
     elif user_message in ["haha", "lol", "lmao", "😂", "🤣"]:
         bot_reply = random.choice([
             "Glad you liked that! You want another one? 😆",
             "Comedy level: AI-powered stand-up! 🎤 Drop the mic.",
             "I live to entertain! Want another joke or should we get philosophical? 😂"
         ])
+
     else:
         try:
             client = openai.OpenAI(api_key=openai.api_key)
@@ -60,6 +71,7 @@ async def handle_message(update: Update, context: CallbackContext):
                 ]
             )
             bot_reply = response.choices[0].message.content.strip()
+
         except Exception as e:
             bot_reply = "Whoops! 🤖 My brain glitched. Maybe my dog unplugged my power cord? 🐶"
             print(f"Error: {e}")
@@ -78,9 +90,8 @@ async def start(update: Update, context: CallbackContext):
 # Main function to run the bot
 def main():
     bot_token = os.environ.get("BOT_TOKEN")
-    
-    app = Application.builder().token(bot_token).build()
 
+    app = Application.builder().token(bot_token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
