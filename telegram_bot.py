@@ -1,86 +1,46 @@
-# Triggering a redeploy
-
-import time
-print("🚀 Bot is starting...")
-time.sleep(5)
-
 import os
 import openai
 import telegram
 import random
+import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 
-# Set up OpenAI API client
+# Load API keys from environment variables
 openai.api_key = os.environ.get("OPENAI_API_KEY")
+tenor_api_key = os.environ.get("TENOR_API_KEY")
+bot_token = os.environ.get("BOT_TOKEN")
 
 # Dictionary to store user names
 user_names = {}
 
-# Function to handle incoming messages
-async def handle_message(update: Update, context: CallbackContext):
-    user_message = update.message.text.lower()
-    user_id = update.message.chat_id
-    user_name = user_names.get(user_id, None)
+# Function to fetch a GIF from Tenor
+def fetch_gif(query):
+    response = requests.get(
+        "https://tenor.googleapis.com/v2/search",
+        params={
+            "q": query,
+            "key": tenor_api_key,
+            "limit": 1,
+            "media_filter": "gif"
+        }
+    )
+    data = response.json()
+    if data.get("results"):
+        return data["results"][0]["media_formats"]["gif"]["url"]
+    return None
 
-    # Fun responses for common phrases
-    if "my name is" in user_message:
-        name = user_message.split("my name is")[-1].strip().capitalize()
-        user_names[user_id] = name
-        bot_reply = random.choice([
-            f"Nice to meet you, {name}! You seem like someone with great taste. 😎",
-            f"{name}? That's a solid name. What’s on your mind?",
-            f"Sweet, {name}! Now that we’re on a first-name basis, what’s up?"
-        ])
+# Function to generate image with DALL·E
+def generate_image(prompt):
+    response = openai.images.generate(
+        model="dall-e-3",
+        prompt=prompt,
+        n=1,
+        size="1024x1024"
+    )
+    return response.data[0].url
 
-    elif "how are you" in user_message:
-        bot_reply = "I’m just a bunch of 1s and 0s, but if I had feelings, I’d say I’m fabulous! 💅 How about you?"
-
-    elif "what's up" in user_message:
-        bot_reply = "Not much, just chilling in cyberspace. You?"
-
-    elif "who are you" in user_message:
-        bot_reply = "I’m your AI assistant! Think of me as your smart, slightly quirky digital sidekick. 😎"
-
-    elif "tell me a joke" in user_message:
-        jokes = [
-            "Why don’t skeletons fight each other? They don’t have the guts.",
-            "Why don’t some couples go to the gym? Because some relationships don’t work out.",
-            "I told my wife she was drawing her eyebrows too high. She looked surprised.",
-            "Why don’t oysters donate to charity? Because they are shellfish!",
-        ]
-        bot_reply = random.choice(jokes)
-
-    elif "i love" in user_message:
-        love_thing = user_message.split("i love")[-1].strip().capitalize()
-        bot_reply = f"Ohhh, {love_thing}! That’s awesome. Tell me more! 😃"
-
-    elif user_message in ["haha", "lol", "lmao", "😂", "🤣"]:
-        bot_reply = random.choice([
-            "Glad you liked that! You want another one? 😆",
-            "Comedy level: AI-powered stand-up! 🎤 Drop the mic.",
-            "I live to entertain! Want another joke or should we get philosophical? 😂"
-        ])
-
-    else:
-        try:
-            client = openai.OpenAI(api_key=openai.api_key)
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You're a witty, fun, helpful, and slightly cheeky assistant. Respond like you're chatting with a friend. Keep things casual and human-like."},
-                    {"role": "user", "content": user_message}
-                ]
-            )
-            bot_reply = response.choices[0].message.content.strip()
-
-        except Exception as e:
-            bot_reply = "Whoops! 🤖 My brain glitched. Maybe my dog unplugged my power cord? 🐶"
-            print(f"Error: {e}")
-
-    await update.message.reply_text(bot_reply)
-
-# Function to start the bot with fun greetings
+# Handle /start command
 async def start(update: Update, context: CallbackContext):
     greetings = [
         "Hey there! 😃 I'm your friendly AI assistant. What’s up?",
@@ -89,12 +49,83 @@ async def start(update: Update, context: CallbackContext):
     ]
     await update.message.reply_text(random.choice(greetings))
 
-# Main function to run the bot
-def main():
-    bot_token = os.environ.get("BOT_TOKEN")
+# Handle /meme command
+async def meme_command(update: Update, context: CallbackContext):
+    gif_url = fetch_gif("funny meme")
+    if gif_url:
+        await update.message.reply_animation(gif_url)
+    else:
+        await update.message.reply_text("Hmm… couldn't find a meme for that moment 😅")
 
+# Handle user messages
+async def handle_message(update: Update, context: CallbackContext):
+    user_message = update.message.text.lower()
+    user_id = update.message.chat_id
+
+    # Name recognition
+    if "my name is" in user_message:
+        name = user_message.split("my name is")[-1].strip().capitalize()
+        user_names[user_id] = name
+        await update.message.reply_text(f"Nice to meet you, {name}! 😄")
+        return
+
+    # Joke
+    elif "tell me a joke" in user_message:
+        jokes = [
+            "Why don’t skeletons fight each other? They don’t have the guts.",
+            "Why did the scarecrow win an award? Because he was outstanding in his field.",
+        ]
+        await update.message.reply_text(random.choice(jokes))
+        return
+
+    # I love...
+    elif "i love" in user_message:
+        love_thing = user_message.split("i love")[-1].strip().capitalize()
+        await update.message.reply_text(f"Ohhh, {love_thing}!! That’s awesome. Tell me more! 😃")
+        return
+
+    # Draw me...
+    elif "draw me" in user_message or "generate an image of" in user_message:
+        prompt = user_message.replace("draw me", "").replace("generate an image of", "").strip()
+        try:
+            await update.message.reply_text("Give me a second to paint something beautiful! 🧑‍🎨")
+            image_url = generate_image(prompt)
+            await update.message.reply_photo(image_url)
+        except Exception as e:
+            print(f"DALL·E error: {e}")
+            await update.message.reply_text("Oops! Couldn't generate an image 😢")
+        return
+
+    # Send me a gif of...
+    elif "send me a gif of" in user_message or "gif of" in user_message:
+        keyword = user_message.split("gif of")[-1].strip()
+        gif_url = fetch_gif(keyword)
+        if gif_url:
+            await update.message.reply_animation(gif_url)
+        else:
+            await update.message.reply_text("Hmm, couldn't find a GIF for that 😅")
+        return
+
+    # Default GPT-4 response
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You're a witty, helpful AI with personality."},
+                {"role": "user", "content": user_message}
+            ]
+        )
+        await update.message.reply_text(response.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"GPT-4 error: {e}")
+        await update.message.reply_text("Oops! Brain cramp 😅")
+
+# Main
+def main():
     app = Application.builder().token(bot_token).build()
+
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("meme", meme_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Bot is running...")
@@ -102,4 +133,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# Another redeploy attempt
